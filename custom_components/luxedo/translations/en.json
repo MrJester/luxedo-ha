@@ -1,0 +1,63 @@
+{
+  "title": "Luxedo",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Luxedo",
+        "description": "Enter your Luxedo portal email and password. Credentials are stored in Home Assistant to renew expired sessions.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect Luxedo",
+        "description": "Enter the current credentials for the same Luxedo account.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to Luxedo. Try again later.",
+      "invalid_auth": "Luxedo rejected authentication. Check your email and password.",
+      "rate_limited": "Luxedo is limiting requests. Wait before trying again.",
+      "unsupported_response": "The Luxedo portal returned an unsupported response."
+    },
+    "abort": {
+      "already_configured": "This Luxedo account is already configured.",
+      "reauth_successful": "Luxedo authentication updated.",
+      "wrong_account": "Sign in to the same Luxedo account originally configured."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connectivity": {
+        "name": "Connectivity"
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Status"
+      },
+      "current_show": {
+        "name": "Current show"
+      },
+      "next_show": {
+        "name": "Next show"
+      },
+      "next_start": {
+        "name": "Next show start"
+      },
+      "firmware": {
+        "name": "Firmware"
+      }
+    },
+    "calendar": {
+      "schedule": {
+        "name": "Schedule"
+      }
+    }
+  }
+}

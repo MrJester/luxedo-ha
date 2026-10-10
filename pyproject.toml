@@ -1,0 +1,21 @@
+[project]
+name = "luxedo-ha"
+version = "0.1.0"
+description = "Read-only Luxedo integration for Home Assistant"
+requires-python = ">=3.13.2"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest-homeassistant-custom-component==0.13.316", "aioresponses", "ruff", "isodate==0.7.2"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]

@@ -1,0 +1,42 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.13'
+      - run: uv sync --frozen
+      - run: uv run ruff check custom_components tests
+      - run: uv run ruff format --check custom_components tests
+      - run: uv run pytest -q
+      - name: Check version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import json, os
+          version = json.load(open('custom_components/luxedo/manifest.json'))['version']
+          assert os.environ['RELEASE_TAG'] == f'v{version}'
+          PY
+      - run: cd custom_components/luxedo && zip -r ../../luxedo.zip . -x '*__pycache__*'
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: luxedo.zip
+          generate_release_notes: true
+          body: |
+            Initial read-only Luxedo integration for Home Assistant 2026.2+.
+
+            Includes native setup and reauthentication, status/connectivity/show
+            sensors, read-only schedules and calendars, and sanitized diagnostics.
+
+            Install using HACS custom repository: https://github.com/MrJester/luxedo-ha
+
+            Automated tests use synthetic fixtures. Authenticated testing against
+            a real Luxedo account/projector is still pending.

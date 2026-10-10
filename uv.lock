@@ -1490,7 +1490,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/96/e3/42c87871920602a3c
 
 [[package]]
 name = "luxedo-ha"
-version = "0.1.0"
+version = "0.1.1"
 source = { virtual = "." }
 
 [package.dev-dependencies]

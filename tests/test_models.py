@@ -138,3 +138,60 @@ def test_duration_crossing_dst_is_elapsed_time():
         schedule.next_occurrence(date("2026-11-01T06:00:00Z"), active=True).end
         == events[0].end
     )
+
+
+@pytest.mark.parametrize(
+    ("mutate", "field", "reason"),
+    [
+        (lambda e: e.pop("id"), "id", "missing_field_or_unknown_timezone"),
+        (lambda e: e.update(repeat="1"), "repeat", "unsupported_repeat_flag"),
+        (
+            lambda e: e["timing"].update(duration_iso="PT0S"),
+            "duration_iso",
+            "nonpositive_duration",
+        ),
+        (
+            lambda e: e["timing"].update(rrule_string="RRULE:FREQ=DAILY"),
+            "rrule_string",
+            "missing_dtstart",
+        ),
+        (
+            lambda e: e["timing"].update(
+                rrule_string="DTSTART:20261010T230000\nRRULE:FREQ=DAILY"
+            ),
+            "rrule_string",
+            "missing_timezone",
+        ),
+    ],
+)
+def test_schedule_diagnostics_identify_field_without_values(
+    startup, mutate, field, reason
+):
+    raw = repeating("DTSTART:20261010T230000Z\nRRULE:FREQ=DAILY;COUNT=3")
+    event = raw["events"][0]
+    event.update(
+        name="private-show-title", id="private-id", project_id="private-project"
+    )
+    mutate(event)
+    device = build_devices(
+        startup["device"], {"7": raw}, {}, date("2026-10-10T20:00:00Z")
+    )["7"]
+    assert device.schedule_error
+    details = device.schedule_error_details
+    assert details["field"] == field
+    assert details["reason"] == reason
+    assert details["event_index"] == 0
+    assert "private" not in str(details)
+    assert "20261010" not in str(details)
+
+
+def test_schedule_diagnostics_do_not_expose_invalid_value(startup):
+    raw = repeating("private-malformed-rule-secret", "private-duration-secret")
+    device = build_devices(
+        startup["device"], {"7": raw}, {}, date("2026-10-10T20:00:00Z")
+    )["7"]
+    assert "secret" not in str(device.schedule_error_details)
+    assert (
+        device.schedule_error_details["event_format"]["timing"]["duration_iso"]["valid"]
+        is False
+    )

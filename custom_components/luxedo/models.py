@@ -101,47 +101,147 @@ def _date(value: str) -> datetime:
     return parsed
 
 
+class LuxedoScheduleError(LuxedoProtocolError):
+    """A schedule rejection with static, non-personal diagnostic details."""
+
+    def __init__(self, details: dict[str, Any]) -> None:
+        super().__init__("Unsupported Luxedo timetable format")
+        self.details = details
+
+
+def _value_format(value: Any) -> dict[str, Any]:
+    """Describe a value without exporting its text, dates, names or identifiers."""
+    result: dict[str, Any] = {"type": type(value).__name__}
+    if isinstance(value, str):
+        result["length"] = len(value)
+        result["has_outer_whitespace"] = value != value.strip()
+        try:
+            result["datetime_has_timezone"] = (
+                datetime.fromisoformat(value).tzinfo is not None
+            )
+        except ValueError:
+            pass
+    return result
+
+
+def _timing_format(event: Any) -> dict[str, Any]:
+    """Only inspect known schema fields; never return arbitrary keys or values."""
+    if not isinstance(event, dict):
+        return _value_format(event)
+    result = {}
+    for key in ("id", "project_id", "repeat", "timing"):
+        result[key] = _value_format(event[key]) if key in event else {"missing": True}
+    repeat = event.get("repeat")
+    result["repeat"]["supported_value"] = repeat in (0, 1, False, True)
+    timing = event.get("timing")
+    if isinstance(timing, dict):
+        for key in ("t_start", "t_end", "rrule_string", "duration_iso"):
+            result["timing"][key] = (
+                _value_format(timing[key]) if key in timing else {"missing": True}
+            )
+        rule = timing.get("rrule_string")
+        if isinstance(rule, str):
+            result["timing"]["rrule_string"].update(
+                {
+                    "has_dtstart": "DTSTART" in rule,
+                    "has_tzid": "TZID=" in rule,
+                    "has_until": "UNTIL=" in rule,
+                    "has_count": "COUNT=" in rule,
+                    "has_literal_newline_escape": "\\n" in rule,
+                }
+            )
+        duration = timing.get("duration_iso")
+        if isinstance(duration, str):
+            try:
+                parsed = parse_duration(duration)
+                result["timing"]["duration_iso"]["fixed_duration"] = isinstance(
+                    parsed, timedelta
+                )
+                if isinstance(parsed, timedelta):
+                    result["timing"]["duration_iso"]["positive"] = parsed > timedelta()
+            except (ValueError, TypeError, OverflowError):
+                result["timing"]["duration_iso"]["valid"] = False
+    return result
+
+
 def parse_schedules(raw: Any, shows: dict[str, str]) -> tuple[Schedule, ...] | None:
     """Null/missing timetable is unknown; an explicit empty list is empty."""
     if raw is None:
         return None
+    field = "events"
+    reason = "invalid_value"
+    event_index = None
+    event = None
     try:
         events = raw["events"]
         if not isinstance(events, list):
+            reason = "expected_list"
             raise ValueError
         result = []
-        for event in events:
+        for index, event in enumerate(events):
+            event_index = index
+            field, reason = "timing", "invalid_value"
             timing = event["timing"]
+            field = "project_id"
             show_id = str(event["project_id"])
+            field = "id"
             common = dict(
                 uid=str(event["id"]),
                 summary=event.get("name") or shows.get(show_id, "Luxedo show"),
                 show_id=show_id,
                 priority=event.get("priority"),
             )
+            field = "repeat"
             repeat = event.get("repeat", 0)
             if repeat not in (0, 1, False, True):
+                reason = "unsupported_repeat_flag"
                 raise ValueError
             if repeat:
+                field = "rrule_string"
                 rule_text = timing["rrule_string"]
-                if "DTSTART" not in rule_text or "FREQ=SECONDLY" in rule_text:
+                if "DTSTART" not in rule_text:
+                    reason = "missing_dtstart"
                     raise ValueError
+                if "FREQ=SECONDLY" in rule_text:
+                    reason = "unsupported_frequency"
+                    raise ValueError
+                reason = "invalid_recurrence_rule"
                 rule = rrulestr(rule_text, tzids=ZoneInfo)
                 first = next(iter(rule), None)
                 if first is not None and first.tzinfo is None:
+                    reason = "missing_timezone"
                     raise ValueError
+                field, reason = "duration_iso", "invalid_duration"
                 duration = parse_duration(timing["duration_iso"])
-                if not isinstance(duration, timedelta) or duration <= timedelta():
+                if not isinstance(duration, timedelta):
+                    reason = "variable_length_duration"
+                    raise ValueError
+                if duration <= timedelta():
+                    reason = "nonpositive_duration"
                     raise ValueError
                 result.append(Schedule(**common, rule=rule_text, duration=duration))
             else:
-                start, end = _date(timing["t_start"]), _date(timing["t_end"])
+                field, reason = "t_start", "invalid_datetime_or_missing_timezone"
+                start = _date(timing["t_start"])
+                field = "t_end"
+                end = _date(timing["t_end"])
                 if end <= start:
+                    reason = "end_not_after_start"
                     raise ValueError
                 result.append(Schedule(**common, start=start, end=end))
         return tuple(result)
     except (KeyError, TypeError, ValueError, OverflowError, AttributeError) as err:
-        raise LuxedoProtocolError("Unsupported Luxedo timetable format") from err
+        if isinstance(err, KeyError):
+            reason = "missing_field_or_unknown_timezone"
+        details = {
+            "event_index": event_index,
+            "field": field,
+            "reason": reason,
+            "exception_type": type(err).__name__,
+            "timetable_type": type(raw).__name__,
+            "event_format": _timing_format(event),
+        }
+        raise LuxedoScheduleError(details) from err
 
 
 @dataclass(frozen=True)
@@ -157,6 +257,7 @@ class Device:
     current_show: str | None
     schedules: tuple[Schedule, ...] | None
     schedule_error: bool = False
+    schedule_error_details: dict[str, Any] | None = None
     next_show: Occurrence | None = None
     calendar_event: Occurrence | None = None
 
@@ -181,6 +282,7 @@ def parse_device(
         if status in {"PROJECT", "PROJ_TT"} and show_id is not None:
             current_show = shows.get(str(show_id), f"Show {show_id}")
         schedule_error = False
+        schedule_error_details = None
         try:
             schedules = parse_schedules(timetable, shows)
             upcoming = [
@@ -193,8 +295,10 @@ def parse_device(
                 for s in schedules or ()
                 if (event := s.next_occurrence(now, active=True))
             ]
-        except LuxedoProtocolError:
+        except LuxedoProtocolError as err:
             schedules, upcoming, calendar, schedule_error = None, [], [], True
+            if isinstance(err, LuxedoScheduleError):
+                schedule_error_details = err.details
         return Device(
             id=str(raw["id"]),
             name=raw.get("name") or "Luxedo projector",
@@ -205,6 +309,7 @@ def parse_device(
             current_show=current_show,
             schedules=schedules,
             schedule_error=schedule_error,
+            schedule_error_details=schedule_error_details,
             next_show=min(upcoming, key=lambda e: e.start, default=None),
             calendar_event=min(calendar, key=lambda e: e.start, default=None),
         )

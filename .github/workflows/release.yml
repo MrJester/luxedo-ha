@@ -30,13 +30,4 @@ jobs:
         with:
           files: luxedo.zip
           generate_release_notes: true
-          body: |
-            Initial read-only Luxedo integration for Home Assistant 2026.2+.
-
-            Includes native setup and reauthentication, status/connectivity/show
-            sensors, read-only schedules and calendars, and sanitized diagnostics.
-
-            Install using HACS custom repository: https://github.com/MrJester/luxedo-ha
-
-            Automated tests use synthetic fixtures. Authenticated testing against
-            a real Luxedo account/projector is still pending.
+          body_path: RELEASE_NOTES.md

@@ -16,8 +16,9 @@ The implementation has not logged into a real Luxedo account or changed a device
 7. If credentials change, verify HA prompts for reauthentication and resumes updates
    with the same account. Do not paste passwords, cookies or raw HAR files into issues.
 8. If a schedule is unavailable while status works, download integration diagnostics
-   and inspect `schedule_parse_error`. Capture only sanitized schema examples if
-   additional protocol investigation is required.
+   and inspect `schedule_parse_error` and `schedule_error_details`. The latter
+   identifies the failing field, reason, and value types without including show
+   names, identifiers, dates, credentials, or raw server values.
 
 Acceptance: status and schedules match the portal, restart/session recovery works,
 cloud outages are distinct from offline projector status, and a multiday run does

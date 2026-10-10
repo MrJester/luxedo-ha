@@ -64,7 +64,7 @@ stay UTC across DST. Explicit TZID rules use that timezone. Ambiguous timestamps
 without a timezone are rejected rather than interpreted in HA's local timezone.
 Missing timetables are unavailable; an explicit empty timetable is an empty
 calendar. An unsupported event makes that device's schedule entities unavailable
-while status continues working. Diagnostics report this condition. Expansion is
+while status continues working. Diagnostics report the failing event index, field, reason, and format flags. Expansion is
 performed outside HA's event loop and capped at 10,000 occurrences per schedule
 per query. Secondly recurrences and calendar-month/year durations are unsupported.
 

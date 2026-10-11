@@ -60,8 +60,9 @@ readiness, or runtime playback. The calendar's current event is the earliest
 starting active event, otherwise the next event.
 
 Schedules preserve the portal's timestamps and RRULE timezone semantics. UTC rules
-stay UTC across DST. Explicit TZID rules use that timezone. Ambiguous timestamps
-without a timezone are rejected rather than interpreted in HA's local timezone.
+stay UTC across DST. Explicit TZID rules use that timezone. Recurrence dates without a
+timezone marker are interpreted as UTC, matching the Luxedo portal. One-time
+timestamps without a timezone remain unsupported.
 Missing timetables are unavailable; an explicit empty timetable is an empty
 calendar. An unsupported event makes that device's schedule entities unavailable
 while status continues working. Diagnostics report the failing event index, field, reason, and format flags. Expansion is

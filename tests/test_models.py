@@ -85,7 +85,7 @@ def test_next_beyond_one_year_and_active():
     [
         {"events": "broken"},
         repeating("RRULE:FREQ=DAILY"),
-        repeating("DTSTART:20261010T230000\nRRULE:FREQ=DAILY;COUNT=3"),
+        repeating("DTSTART:invalid\nRRULE:FREQ=DAILY;COUNT=3"),
         repeating("DTSTART:20261010T230000Z\nRRULE:FREQ=DAILY", "P1M"),
         repeating("DTSTART:20261010T230000Z\nRRULE:FREQ=SECONDLY"),
     ],
@@ -157,10 +157,10 @@ def test_duration_crossing_dst_is_elapsed_time():
         ),
         (
             lambda e: e["timing"].update(
-                rrule_string="DTSTART:20261010T230000\nRRULE:FREQ=DAILY"
+                rrule_string="DTSTART;TZID=Not/AZone:20261010T230000\nRRULE:FREQ=DAILY"
             ),
             "rrule_string",
-            "missing_timezone",
+            "missing_field_or_unknown_timezone",
         ),
     ],
 )
@@ -195,3 +195,32 @@ def test_schedule_diagnostics_do_not_expose_invalid_value(startup):
         device.schedule_error_details["event_format"]["timing"]["duration_iso"]["valid"]
         is False
     )
+
+
+@pytest.mark.parametrize(
+    ("start_suffix", "until_suffix"), [("", ""), ("", "Z"), ("Z", "")]
+)
+def test_portal_recurrence_without_timezone_uses_utc(start_suffix, until_suffix):
+    # Luxedo's JS parser uses Date.UTC even when the serialized Z is absent.
+    raw = repeating(
+        f"DTSTART:20261031T230000{start_suffix}\n"
+        f"RRULE:FREQ=DAILY;UNTIL=20261102T230000{until_suffix}"
+    )
+    schedule = parse_schedules(raw, {})[0]
+    events = schedule.occurrences(
+        date("2026-10-31T00:00:00Z"), date("2026-11-04T00:00:00Z")
+    )
+    assert [e.start for e in events] == [
+        date("2026-10-31T23:00:00Z"),
+        date("2026-11-01T23:00:00Z"),
+        date("2026-11-02T23:00:00Z"),
+    ]
+    assert (
+        schedule.next_occurrence(date("2026-11-01T00:00:00Z"), active=True).start
+        == events[0].start
+    )
+    assert (
+        schedule.next_occurrence(date("2026-11-01T00:00:00Z"), active=False).start
+        == events[1].start
+    )
+    assert schedule.next_occurrence(date("2026-11-03T00:00:00Z"), active=False) is None

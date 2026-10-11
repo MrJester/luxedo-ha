@@ -4,7 +4,7 @@
 async def async_get_config_entry_diagnostics(hass, entry):
     coordinator = entry.runtime_data
     return {
-        "integration_version": "0.1.1",
+        "integration_version": "0.1.2",
         "last_update_success": coordinator.last_update_success,
         "update_interval_seconds": coordinator.update_interval.total_seconds(),
         "devices": [

@@ -84,3 +84,19 @@ uses the account-level read method and never acquires control.
 HTTP 401/403 trigger bounded relogin and then HA reauth. Other unexpected 4xx
 responses are protocol errors, not assumed bad passwords. HTML/redirect responses
 are rejected rather than silently parsed or followed. TLS verification is enabled.
+
+
+## Recurrence compatibility correction (2026-10-11)
+
+Real-device diagnostics from v0.1.1 identified a rejected RRULE with DTSTART and
+UNTIL but no timezone marker or TZID. The portal's bundled `untilStringToDate`
+accepts an optional trailing Z and always constructs a `Date.UTC(...)` value.
+`parseDtstart` uses the same parser; `DateWithZone.isUTC` is true without a TZID.
+The portal converts resulting JS dates into local display times afterward.
+
+Starting in v0.1.2, unmarked DTSTART and UNTIL dates are normalized to UTC before
+Python dateutil parses the rule. Explicit TZID rules retain their declared zone.
+This matches the observed portal implementation and avoids interpreting stored
+UTC values in the Home Assistant server's timezone. Tests cover unmarked and
+mixed marked/unmarked DTSTART/UNTIL, inclusive UNTIL boundaries, DST, next-show
+sensors, and calendar event retrieval. Raw user diagnostics are not stored here.

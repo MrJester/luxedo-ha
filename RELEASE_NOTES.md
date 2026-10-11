@@ -1,14 +1,16 @@
-## v0.1.1 — Schedule parsing diagnostics
+## v0.1.2 — Fix recurring schedules reported as unavailable
 
-The first real-device report confirms that authentication and cloud updates work,
-but a returned timetable is rejected by the schedule parser. Version 0.1.0 only
-reported a boolean error, so it did not identify the incompatible field.
+Luxedo can return recurrence dates without a trailing timezone marker. Earlier
+versions rejected these rules, making the calendar and upcoming-show sensors
+unavailable even when shows were scheduled.
 
-This update adds `schedule_error_details` to the integration's downloadable
-diagnostics. It reports the failing event index, field, reason, and value-format
-flags while excluding credentials, show names, identifiers, and actual timestamps.
+The parser now matches the Luxedo portal: DTSTART and UNTIL values without a
+TZID are interpreted as UTC. Explicit timezone rules retain their existing
+behavior. No Home Assistant timezone setting change is needed.
 
-After updating through HACS and restarting Home Assistant, download fresh Luxedo
-diagnostics if schedule entities remain unavailable. These details are needed to
-identify and fix the affected timetable format; this release does not claim to
-resolve the underlying schedule incompatibility.
+Regression tests reproduce the rejected format and verify next-show sensors,
+calendar events, inclusive recurrence end dates, and daylight-saving behavior.
+
+Update Luxedo through HACS and restart Home Assistant. The reported
+`rrule_string / missing_timezone` failure is addressed by this release; confirm
+that upcoming-show times match your portal after updating.

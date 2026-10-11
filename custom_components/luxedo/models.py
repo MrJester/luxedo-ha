@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from itertools import islice
@@ -164,6 +165,30 @@ def _timing_format(event: Any) -> dict[str, Any]:
     return result
 
 
+def _normalize_portal_rrule(rule: str) -> str:
+    """Match Luxedo's JS UTC parsing for recurrence dates without a TZID.
+
+    Its bundled untilStringToDate uses Date.UTC for DTSTART and UNTIL with
+    or without a trailing Z. dateutil instead treats unmarked dates as naive.
+    Explicit TZID rules retain their original wall-clock semantics.
+    """
+    if re.search(r"\bTZID=", rule, flags=re.IGNORECASE):
+        return rule
+
+    def utc_date(match: re.Match[str]) -> str:
+        value = match[2]
+        if len(value) == 8:
+            value += "T000000"
+        return f"{match[1]}{value}Z"
+
+    return re.sub(
+        r"\b(DTSTART[:=]|UNTIL=)(\d{8}(?:T\d{6})?)(?=$|[;\r\n])",
+        utc_date,
+        rule,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+
+
 def parse_schedules(raw: Any, shows: dict[str, str]) -> tuple[Schedule, ...] | None:
     """Null/missing timetable is unknown; an explicit empty list is empty."""
     if raw is None:
@@ -206,6 +231,7 @@ def parse_schedules(raw: Any, shows: dict[str, str]) -> tuple[Schedule, ...] | N
                     reason = "unsupported_frequency"
                     raise ValueError
                 reason = "invalid_recurrence_rule"
+                rule_text = _normalize_portal_rrule(rule_text)
                 rule = rrulestr(rule_text, tzids=ZoneInfo)
                 first = next(iter(rule), None)
                 if first is not None and first.tzinfo is None:

@@ -127,3 +127,44 @@ async def test_invalid_schedule_preserves_status(hass, client, timetables):
     assert hass.states.get("sensor.porch_status").state == "PROJECT"
     assert hass.states.get("calendar.porch_schedule").state == "unavailable"
     assert hass.states.get("sensor.porch_next_show").state == "unavailable"
+
+
+async def test_unmarked_recurring_dates_populate_schedule_entities(
+    hass, client, freezer, timetables
+):
+    freezer.move_to("2026-10-11T20:00:00Z")
+    timetables["7"]["events"] = [
+        {
+            "id": "recurring-event",
+            "project_id": 9,
+            "name": "Evening show",
+            "repeat": 1,
+            "priority": 0,
+            "timing": {
+                "rrule_string": (
+                    "DTSTART:20261011T230000\nRRULE:FREQ=DAILY;UNTIL=20261013T230000"
+                ),
+                "duration_iso": "PT2H30M",
+            },
+        }
+    ]
+    entry = await setup(hass)
+    assert hass.states.get("sensor.porch_next_show").state == "Evening show"
+    assert (
+        hass.states.get("sensor.porch_next_show_start").state
+        == "2026-10-11T23:00:00+00:00"
+    )
+    assert hass.states.get("calendar.porch_schedule").state == "off"
+    calendar = LuxedoCalendar(entry.runtime_data, "7")
+    events = await calendar.async_get_events(
+        hass,
+        datetime.fromisoformat("2026-10-11T00:00:00Z"),
+        datetime.fromisoformat("2026-10-14T00:00:00Z"),
+    )
+    assert len(events) == 3
+    assert events[0].start == datetime.fromisoformat("2026-10-11T23:00:00Z")
+    assert events[0].end == datetime.fromisoformat("2026-10-12T01:30:00Z")
+    diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+    assert diagnostics["devices"][0]["schedule_available"] is True
+    assert diagnostics["devices"][0]["schedule_parse_error"] is False
+    assert diagnostics["devices"][0]["schedule_error_details"] is None
